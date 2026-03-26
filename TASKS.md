@@ -5,10 +5,10 @@ This document tracks the progress of the ISW Utility implementation, following t
 ## Phase 1: Architecture & Technical Foundation
 - [ ] **Initial Project Setup**: Configure `go.mod` and install Fyne v2.
 - [ ] **Domain Definition (`/internal/domain`)**:
-    - [ ] Define `Telemetry` entity (CPU/GPU Temp/Load).
-    - [ ] Define `FanStatus` entity (RPM, Idle/Max range).
-    - [ ] Define `SystemInfo` entity (Kernel, Uptime, Freq).
-    - [ ] Define Interfaces (Ports): `SensorRepository` and `ControlRepository`.
+    - [x] Define `Telemetry` entity (CPU/GPU Temp/Load).
+    - [x] Define `FanStatus` entity (RPM, Idle/Max range).
+    - [x] Define `SystemInfo` entity (Kernel, Uptime, Freq).
+    - [x] Define Interfaces (Ports): `SensorRepository` and `ControlRepository`.
 - [ ] **Theme System Implementation**: Create a custom `fyne.Theme` matching the `#0c0d18` palette and Space Grotesk typography.
 
 ## Phase 2: Infrastructure & System Access
