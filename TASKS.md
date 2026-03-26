@@ -4,7 +4,7 @@ This document tracks the progress of the ISW Utility implementation, following t
 
 ## Phase 1: Architecture & Technical Foundation
 - [x] **Initial Project Setup**: Configure `go.mod` and install Fyne v2.
-- [ ] **Domain Definition (`/internal/domain`)**:
+- [x] **Domain Definition (`/internal/domain`)**:
     - [x] Define `Telemetry` entity (CPU/GPU Temp/Load).
     - [x] Define `FanStatus` entity (RPM, Idle/Max range).
     - [x] Define `SystemInfo` entity (Kernel, Uptime, Freq).
@@ -12,10 +12,10 @@ This document tracks the progress of the ISW Utility implementation, following t
 - [x] **Theme System Implementation**: Create a custom `fyne.Theme` matching the `#0c0d18` palette and Space Grotesk typography.
 
 ## Phase 2: Infrastructure & System Access
-- [ ] **Sensor Implementation (`/internal/repository`)**:
-    - [ ] Develop parser for `isw` output or `/sys/class/hwmon` data.
-    - [ ] Implement `SystemInfo` provider (reading `/proc` or using `uname`).
-- [ ] **Boost Mode Control**: Implement shell command execution (e.g., `isw -b on/off`) with proper privilege handling.
+- [x] **Sensor Implementation (`/internal/repository`)**:
+    - [x] Develop parser for `isw` output or `/sys/class/hwmon` data.
+    - [x] Implement `SystemInfo` provider (reading `/proc` or using `uname`).
+- [x] **Boost Mode Control**: Implement shell command execution (e.g., `isw -b on/off`) with proper privilege handling.
 - [ ] **Telemetry Service (`/internal/service`)**: Implement an asynchronous polling loop to update application state without blocking the UI.
 
 ## Phase 3: UI Development (Fyne)
