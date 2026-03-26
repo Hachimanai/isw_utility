@@ -21,14 +21,14 @@ Le projet suit la **Standard Go Project Layout** et les principes de la **Clean 
   - `/internal/domain` : Entités et interfaces du domaine (pur Go, aucune dépendance externe).
   - `/internal/service` : Logique métier (Use Cases).
   - `/internal/repository` : Implémentation de la persistance (SQL, NoSQL).
-  - `/internal/handler` : Couche de transport (HTTP, gRPC).
+  - `/internal/ui` : Implémentation de l'interface graphique (Fyne).
 - `/pkg` : Code de bibliothèque pouvant être utilisé par des projets externes (à utiliser avec parcimonie).
 - `/config` : Structures de configuration.
 
 ### Règles de Dépendance
 - Le **Domaine** ne dépend de rien.
 - Les **Services** dépendent du Domaine.
-- Les **Handlers** et **Repositories** dépendent des Services et du Domaine.
+- La **UI** et les **Repositories** dépendent des Services et du Domaine.
 - L'injection de dépendances doit être utilisée (passage par constructeur/interface).
 
 ## 4. Style de Codage et Conventions
@@ -56,6 +56,12 @@ Le projet suit la **Standard Go Project Layout** et les principes de la **Clean 
 - Gérer proprement l'annulation des goroutines via le contexte.
 - Préférer les channels pour la communication et sync.Mutex pour l'état partagé simple.
 - Éviter les goroutines orphelines (utiliser errgroup ou WaitGroup).
+
+### Interface Graphique (Fyne)
+- Utiliser **Fyne** pour toute l'interface graphique.
+- Séparer strictement la mise en page (layout) de la logique métier.
+- Ne jamais bloquer le thread principal de l'UI. Utiliser des goroutines pour les tâches longues et mettre à jour l'UI via les fonctions thread-safe de Fyne (ex: `Refresh()`).
+- Utiliser le data binding de Fyne pour synchroniser l'état de l'application avec les widgets quand cela simplifie le code.
 
 ## 5. Tests
 - Utiliser le package standard testing.
@@ -86,6 +92,7 @@ Le projet suit la **Standard Go Project Layout** et les principes de la **Clean 
 ### Bibliothèques et Outils Recommandés
 - Sauf instruction contraire, utiliser ces standards :
 
+- Interface Graphique : **Fyne** (mandatory).
 - HTTP : net/http standard ou chi (pour le routing léger).
 - Logging : log/slog (Go 1.21+) ou zap.
 - Config : viper ou kelseyhightower/envconfig.
@@ -125,7 +132,8 @@ Le projet suit la **Standard Go Project Layout** et les principes de la **Clean 
   - **Subject line**: Concise (50 chars max), capitalized, no period at the end. Use imperative mood (e.g., "Add cell size control" instead of "Added...").
   - **Body (optional)**: Detailed explanation of "what" and "why" if the change is complex.
 - **Verified Commits**: Ensure the code builds, passes tests, and passes linting (`npm run lint`) before committing.
-- **Automation**: Commit changes autonomously after each significant task or at the user's request, following these conventions.
+- **Confirmation Protocol**: After each batch of significant modifications, you MUST ask the user if you should create a commit and if you should push the changes.
+- **Automation**: Commit changes after user confirmation or at the user's explicit request, following these conventions.
 
 
 ## 6. Business Logic
