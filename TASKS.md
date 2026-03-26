@@ -9,7 +9,7 @@ This document tracks the progress of the ISW Utility implementation, following t
     - [x] Define `FanStatus` entity (RPM, Idle/Max range).
     - [x] Define `SystemInfo` entity (Kernel, Uptime, Freq).
     - [x] Define Interfaces (Ports): `SensorRepository` and `ControlRepository`.
-- [ ] **Theme System Implementation**: Create a custom `fyne.Theme` matching the `#0c0d18` palette and Space Grotesk typography.
+- [x] **Theme System Implementation**: Create a custom `fyne.Theme` matching the `#0c0d18` palette and Space Grotesk typography.
 
 ## Phase 2: Infrastructure & System Access
 - [ ] **Sensor Implementation (`/internal/repository`)**:
