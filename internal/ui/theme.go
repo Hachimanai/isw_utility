@@ -9,12 +9,14 @@ import (
 
 var (
 	// Terminal Architect Palette
-	colorBackground    = color.RGBA{R: 0x0c, G: 0x0d, B: 0x18, A: 0xff} // Deep-space background
-	colorPrimary      = color.RGBA{R: 0x8b, G: 0xce, B: 0xff, A: 0xff} // Primary blue
-	colorSurface       = color.RGBA{R: 0x16, G: 0x18, B: 0x2c, A: 0xff} // Surface container
-	colorText          = color.RGBA{R: 0xe3, G: 0xe3, B: 0xff, A: 0xff} // Main text
-	colorError         = color.RGBA{R: 0xee, G: 0x7d, B: 0x77, A: 0xff} // Critical error/temp
-	colorSecondaryGPU = color.RGBA{R: 0x17, G: 0x93, B: 0xd1, A: 0xff} // GPU secondary color
+	ColorBackground       = color.RGBA{R: 0x0c, G: 0x0d, B: 0x18, A: 0xff} // Deep-space background
+	ColorPrimary          = color.RGBA{R: 0x8b, G: 0xce, B: 0xff, A: 0xff} // Primary blue
+	ColorSurface          = color.RGBA{R: 0x16, G: 0x18, B: 0x2c, A: 0xff} // Surface container
+	ColorSurfaceLow       = color.RGBA{R: 0x11, G: 0x12, B: 0x21, A: 0xff} // Lower surface
+	ColorSurfaceHigh      = color.RGBA{R: 0x20, G: 0x23, B: 0x41, A: 0xff} // Higher surface
+	ColorText             = color.RGBA{R: 0xe3, G: 0xe3, B: 0xff, A: 0xff} // Main text
+	ColorError            = color.RGBA{R: 0xee, G: 0x7d, B: 0x77, A: 0xff} // Critical error/temp
+	ColorSecondaryGPU     = color.RGBA{R: 0x17, G: 0x93, B: 0xd1, A: 0xff} // GPU secondary color
 )
 
 // ArchitectTheme implements a custom fyne.Theme following the "Terminal Architect" design system.
@@ -23,27 +25,24 @@ type ArchitectTheme struct{}
 var _ fyne.Theme = (*ArchitectTheme)(nil)
 
 // Color returns the color for a specific theme name and variant.
-// This theme is optimized for a dark appearance regardless of the system variant.
 func (m *ArchitectTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) color.Color {
-	// Default to dark variant for fallback colors as this is a dark-only theme design
 	fallbackVariant := theme.VariantDark
 
 	switch name {
 	case theme.ColorNameBackground:
-		return colorBackground
+		return ColorBackground
 	case theme.ColorNamePrimary:
-		return colorPrimary
+		return ColorPrimary
 	case theme.ColorNameInputBackground:
-		return colorSurface
+		return ColorSurface
 	case theme.ColorNameForeground:
-		return colorText
+		return ColorText
 	case theme.ColorNameError:
-		return colorError
+		return ColorError
 	case theme.ColorNameButton:
-		return colorSurface
-	// "No-Line" Rule: Use background color for separators to avoid visible 1px borders
+		return ColorSurface
 	case theme.ColorNameSeparator:
-		return colorBackground
+		return ColorBackground // "No-Line" Rule
 	case theme.ColorNameShadow:
 		return color.Transparent
 	}
@@ -52,9 +51,7 @@ func (m *ArchitectTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVaria
 }
 
 // Font returns the resource for the requested font style.
-// Currently returns Fyne's default font as a placeholder for "Space Grotesk".
 func (m *ArchitectTheme) Font(style fyne.TextStyle) fyne.Resource {
-	// TODO: Replace with "Space Grotesk" / "Monospace" as per design spec
 	return theme.DefaultTheme().Font(style)
 }
 
@@ -65,6 +62,16 @@ func (m *ArchitectTheme) Icon(name fyne.ThemeIconName) fyne.Resource {
 
 // Size returns the standard size for the requested size name.
 func (m *ArchitectTheme) Size(name fyne.ThemeSizeName) float32 {
+	switch name {
+	case theme.SizeNamePadding:
+		return 8
+	case theme.SizeNameInnerPadding:
+		return 4
+	case theme.SizeNameScrollBarRadius:
+		return 5
+	case theme.SizeNameSelectionRadius:
+		return 2
+	}
 	return theme.DefaultTheme().Size(name)
 }
 
