@@ -135,5 +135,48 @@ Le projet suit la **Standard Go Project Layout** et les principes de la **Clean 
 - **Confirmation Protocol**: After each batch of significant modifications, you MUST ask the user if you should create a commit and if you should push the changes.
 - **Automation**: Commit changes after user confirmation or at the user's explicit request, following these conventions.
 
+## 6. Business Logic & UI/UX Guidelines (Terminal Architect)
 
-## 6. Business Logic
+L'application doit refléter le design system "Terminal Architect", alliant l'efficacité d'une interface en ligne de commande (CLI) à la sophistication d'une interface graphique moderne (style Arch Linux).
+
+### Fonctionnalités Métier (Core Features)
+1. **Télémétrie en temps réel (Header)** :
+   - Température CPU (`CPU_TEMP`) en °C.
+   - Charge CPU (`CPU_LOAD`) en %.
+   - Température GPU (`GPU_TEMP`) en °C.
+   - Charge GPU (`GPU_LOAD`) en %.
+2. **Jauges de Ventilation (Fan Gauges)** :
+   - Affichage de la vitesse de rotation en temps réel (RPM) pour le CPU et le GPU.
+   - Indicateur visuel de progression (barre de IDLE à MAX).
+3. **Contrôle du "Boost Mode"** :
+   - Switch (Toggle) permettant d'outrepasser les courbes de ventilation par défaut de l'EC (Embedded Controller) pour une dissipation thermique maximale.
+   - Action sous-jacente : Exécution de la commande système (ex: `isw -b on` / `isw -b off`).
+4. **Informations Système (Micro-Panel)** :
+   - Version du Kernel (ex: `6.7.4-arch1-1`).
+   - Uptime du système.
+   - Fréquence CPU (`CPU_Freq`).
+   - Charge GPU globale (`GPU_Load`).
+5. **Historique des Températures (Analytics)** :
+   - Affichage sous forme d'histogrammes (bar charts) pour évaluer l'évolution récente.
+   - Séparation entre l'historique CPU (`CPU_TEMP_HISTORY`) et l'historique GPU (`GPU_TEMP_HISTORY`), avec une plage de 0 à 100°C.
+
+### Directives Design System (Fyne Implementation)
+L'implémentation Fyne doit respecter strictement les règles visuelles suivantes tirées du document de design :
+
+- **Couleurs & "No-Line" Rule** :
+  - Thème sombre profond ("Deep-space"). Fond principal (`surface`) : `#0c0d18`.
+  - Conteneurs (`surface-container`) : `#16182c`, `#111221`, `#202341`.
+  - Couleur primaire (`primary`) : `#8bceff` (Bleu vif). Couleur secondaire GPU : `#1793D1`.
+  - **Interdiction d'utiliser des bordures pleines (1px solid)** pour structurer la page. Utiliser les changements de tons (Background Color Shifts) pour délimiter les zones.
+  - Couleur d'erreur (`error`) : `#ee7d77` (pour les températures critiques).
+- **Typographie ("Monospace Authority")** :
+  - Données techniques, labels, valeurs numériques, et logs : Police **Monospace** (ex: correspond à *Space Grotesk Mono* ou style Terminal).
+  - Titres et affichages principaux (Display) : Police sans-serif géométrique, avec un aspect "ingénierie".
+  - Alignement : Toujours aligner les valeurs numériques à droite dans les colonnes pour un style terminal.
+- **Formes & Composants** :
+  - Rejet des ombres portées traditionnelles au profit de l'empilement tonal (Tonal Stacking).
+  - Boutons/Conteneurs : Coins peu arrondis (pas de `xl` ou `full`). Privilégier un aspect anguleux et technique (`sm` ou `DEFAULT`).
+  - Utilisation d'espace négatif (marges larges) de manière asymétrique pour créer une "tension éditoriale" et casser l'effet de grille standard.
+- **Comportements UI** :
+  - Les animations doivent être subtiles et rapides (ex: 200ms ease-out) pour simuler la réactivité d'un système haute performance.
+  - Les interactions (ex: survol des boutons ou des barres d'histogramme) doivent créer un effet de surbrillance ("Glow").
