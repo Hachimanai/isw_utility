@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
@@ -38,6 +39,15 @@ type Dashboard struct {
 	kernelLabel  *widget.Label
 	uptimeLabel  *widget.Label
 	cpuFreqLabel *widget.Label
+
+	// Status/Error Bar
+	statusLabel *widget.Label
+
+	// Interpolation targets
+	targetCPURPM int
+	targetGPURPM int
+	currentCPURPM float64
+	currentGPURPM float64
 }
 
 // NewDashboard creates a new Dashboard instance.
@@ -47,6 +57,7 @@ func NewDashboard(window fyne.Window, telemetryService *service.TelemetryService
 		telemetryService: telemetryService,
 	}
 	d.initWidgets()
+	d.startAnimationLoop()
 	return d
 }
 
@@ -76,7 +87,13 @@ func (d *Dashboard) initWidgets() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := d.telemetryService.SetBoostMode(ctx, enabled); err != nil {
-			fmt.Printf("Error setting boost mode: %v\n", err)
+			d.SetStatus(fmt.Sprintf("ERR: %v", err))
+		} else {
+			d.SetStatus("BOOST MODE UPDATED")
+			go func() {
+				time.Sleep(3 * time.Second)
+				d.SetStatus("SYSTEM READY")
+			}()
 		}
 	})
 
@@ -87,44 +104,78 @@ func (d *Dashboard) initWidgets() {
 	d.uptimeLabel.TextStyle = fyne.TextStyle{Monospace: true}
 	d.cpuFreqLabel = widget.NewLabel("Freq: ...")
 	d.cpuFreqLabel.TextStyle = fyne.TextStyle{Monospace: true}
+
+	// Status
+	d.statusLabel = widget.NewLabel("SYSTEM READY")
+	d.statusLabel.TextStyle = fyne.TextStyle{Monospace: true}
+}
+
+func (d *Dashboard) startAnimationLoop() {
+	go func() {
+		ticker := time.NewTicker(30 * time.Millisecond) // ~33 FPS
+		for range ticker.C {
+			// Linear interpolation for smooth RPM bars
+			lerp := 0.1
+			d.currentCPURPM += (float64(d.targetCPURPM) - d.currentCPURPM) * lerp
+			d.currentGPURPM += (float64(d.targetGPURPM) - d.currentGPURPM) * lerp
+
+			d.cpuFanGauge.SetRPM(int(d.currentCPURPM))
+			d.gpuFanGauge.SetRPM(int(d.currentGPURPM))
+		}
+	}()
 }
 
 // BuildLayout constructs the Fyne container hierarchy.
 func (d *Dashboard) BuildLayout() fyne.CanvasObject {
-	// 1. Header (Real-time Telemetry)
-	header := container.NewHBox(
+	headerBg := canvas.NewRectangle(ColorSurfaceLow)
+	headerContent := container.NewHBox(
 		layout.NewSpacer(),
 		widget.NewLabel("CPU:"), d.cpuTempLabel, d.cpuLoadLabel,
 		layout.NewSpacer(),
 		widget.NewLabel("GPU:"), d.gpuTempLabel, d.gpuLoadLabel,
 		layout.NewSpacer(),
 	)
+	header := container.NewStack(headerBg, headerContent)
 
-	// 2. Main Area (Asymmetric 2/3 - 1/3)
-	// Left Area: Fans and Analytics
-	fansSection := container.NewVBox(
+	fansCard := container.NewVBox(
 		widget.NewLabel("FANS"),
 		d.cpuFanGauge,
 		d.gpuFanGauge,
-		layout.NewSpacer(),
+	)
+	
+	analyticsCard := container.NewVBox(
+		widget.NewLabel("ANALYTICS"),
 		d.cpuTempHist,
 		d.gpuTempHist,
 	)
 
-	// Right Area: Boost Mode and System Info
-	sidePanel := container.NewVBox(
+	leftSection := container.NewVBox(fansCard, layout.NewSpacer(), analyticsCard)
+
+	sidePanelBg := canvas.NewRectangle(ColorSurfaceLow)
+	sidePanelContent := container.NewVBox(
 		widget.NewLabel("CONTROL"),
 		d.boostToggle,
+		layout.NewSpacer(),
 		widget.NewLabel("SYSTEM"),
 		d.kernelLabel,
 		d.uptimeLabel,
 		d.cpuFreqLabel,
 	)
+	sidePanel := container.NewStack(sidePanelBg, sidePanelContent)
 
-	mainArea := container.New(layout.NewGridLayoutWithColumns(2), fansSection, sidePanel)
+	mainArea := container.NewHSplit(leftSection, sidePanel)
+	mainArea.Offset = 0.7 
 
-	// Final assembly
-	return container.NewBorder(header, nil, nil, nil, mainArea)
+	footerBg := canvas.NewRectangle(ColorSurfaceHigh)
+	footerContent := container.NewHBox(d.statusLabel, layout.NewSpacer())
+	footer := container.NewStack(footerBg, footerContent)
+
+	return container.NewBorder(header, footer, nil, nil, mainArea)
+}
+
+// SetStatus updates the status label.
+func (d *Dashboard) SetStatus(msg string) {
+	d.statusLabel.SetText(msg)
 }
 
 // Update updates the UI widgets with new data.
@@ -138,10 +189,10 @@ func (d *Dashboard) Update(state service.DashboardState) {
 	d.gpuTempHist.AddValue(state.Telemetry.GPUTemp)
 
 	if len(state.Fans) >= 2 {
-		d.cpuFanGauge.SetRPM(state.Fans[0].RPM)
-		d.gpuFanGauge.SetRPM(state.Fans[1].RPM)
+		d.targetCPURPM = state.Fans[0].RPM
+		d.targetGPURPM = state.Fans[1].RPM
 	} else if len(state.Fans) == 1 {
-		d.cpuFanGauge.SetRPM(state.Fans[0].RPM)
+		d.targetCPURPM = state.Fans[0].RPM
 	}
 
 	d.boostToggle.SetChecked(state.Boost)

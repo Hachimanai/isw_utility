@@ -2,13 +2,37 @@ package ui
 
 import (
 	"fmt"
+	"image/color"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 )
+
+var _ desktop.Hoverable = (*FanGauge)(nil)
+var _ desktop.Hoverable = (*TemperatureHistogram)(nil)
+
+// brighterColor returns a color that is slightly more luminous.
+func brighterColor(c color.Color) color.Color {
+	r, g, b, a := c.RGBA()
+	// Increase brightness by 20%
+	return color.RGBA{
+		R: uint8(min(int(r>>8)+40, 255)),
+		G: uint8(min(int(g>>8)+40, 255)),
+		B: uint8(min(int(b>>8)+40, 255)),
+		A: uint8(a >> 8),
+	}
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
 
 // FanGauge is a custom widget for displaying fan RPM.
 type FanGauge struct {
@@ -17,9 +41,11 @@ type FanGauge struct {
 	RPM   int
 	Max   int
 
-	rpmLabel *widget.Label
-	bar      *canvas.Rectangle
-	bgBar    *canvas.Rectangle
+	isHovered bool
+	rpmLabel  *widget.Label
+	bar       *canvas.Rectangle
+	bgBar     *canvas.Rectangle
+	glow      *canvas.Rectangle
 }
 
 func NewFanGauge(label string, maxRPM int) *FanGauge {
@@ -39,6 +65,9 @@ func NewFanGauge(label string, maxRPM int) *FanGauge {
 	g.bar = canvas.NewRectangle(ColorPrimary)
 	g.bar.SetMinSize(fyne.NewSize(0, 4))
 
+	g.glow = canvas.NewRectangle(color.Transparent)
+	g.glow.Hide()
+
 	return g
 }
 
@@ -48,12 +77,27 @@ func (g *FanGauge) SetRPM(rpm int) {
 	g.Refresh()
 }
 
+func (g *FanGauge) MouseIn(*desktop.MouseEvent) {
+	g.isHovered = true
+	g.glow.FillColor = color.RGBA{R: ColorPrimary.R, G: ColorPrimary.G, B: ColorPrimary.B, A: 40}
+	g.glow.Show()
+	g.Refresh()
+}
+
+func (g *FanGauge) MouseOut() {
+	g.isHovered = false
+	g.glow.Hide()
+	g.Refresh()
+}
+
+func (g *FanGauge) MouseMoved(*desktop.MouseEvent) {}
+
 func (g *FanGauge) CreateRenderer() fyne.WidgetRenderer {
 	title := widget.NewLabel(g.Label)
 	title.TextStyle = fyne.TextStyle{Bold: true}
 	
 	header := container.NewHBox(title, layout.NewSpacer(), g.rpmLabel)
-	stack := container.NewStack(g.bgBar, g.bar)
+	stack := container.NewStack(g.bgBar, g.glow, g.bar)
 	
 	content := container.NewVBox(header, stack)
 	return &fanGaugeRenderer{
@@ -70,6 +114,8 @@ type fanGaugeRenderer struct {
 func (r *fanGaugeRenderer) Layout(size fyne.Size) {
 	r.content.Resize(size)
 	r.gauge.bgBar.SetMinSize(fyne.NewSize(size.Width, 4))
+	r.gauge.glow.Resize(fyne.NewSize(size.Width, 12))
+	r.gauge.glow.Move(fyne.NewPos(0, -4))
 	
 	percent := float32(r.gauge.RPM) / float32(r.gauge.Max)
 	if percent > 1.0 {
@@ -83,8 +129,13 @@ func (r *fanGaugeRenderer) MinSize() fyne.Size {
 }
 
 func (r *fanGaugeRenderer) Refresh() {
+	if r.gauge.isHovered {
+		r.gauge.bar.FillColor = brighterColor(ColorPrimary)
+	} else {
+		r.gauge.bar.FillColor = ColorPrimary
+	}
+	
 	r.gauge.bgBar.FillColor = ColorSurfaceLow
-	r.gauge.bar.FillColor = ColorPrimary
 	
 	percent := float32(r.gauge.RPM) / float32(r.gauge.Max)
 	if percent > 1.0 {
@@ -107,6 +158,8 @@ type TemperatureHistogram struct {
 	Label   string
 	History []float64
 	MaxVal  float64
+
+	isHovered bool
 }
 
 func NewTemperatureHistogram(label string) *TemperatureHistogram {
@@ -123,6 +176,18 @@ func (h *TemperatureHistogram) AddValue(val float64) {
 	h.History = append(h.History[1:], val)
 	h.Refresh()
 }
+
+func (h *TemperatureHistogram) MouseIn(*desktop.MouseEvent) {
+	h.isHovered = true
+	h.Refresh()
+}
+
+func (h *TemperatureHistogram) MouseOut() {
+	h.isHovered = false
+	h.Refresh()
+}
+
+func (h *TemperatureHistogram) MouseMoved(*desktop.MouseEvent) {}
 
 func (h *TemperatureHistogram) CreateRenderer() fyne.WidgetRenderer {
 	title := widget.NewLabel(h.Label)
@@ -154,11 +219,19 @@ func (r *tempHistogramRenderer) Layout(size fyne.Size) {
 	
 	r.bars.Objects = nil
 	for i, val := range r.hist.History {
+		if val <= 0 {
+			continue
+		}
 		h := float32(val/r.hist.MaxVal) * maxH
 		rect := canvas.NewRectangle(ColorPrimary)
 		if val > 80 {
 			rect.FillColor = ColorError
 		}
+		
+		if r.hist.isHovered {
+			rect.FillColor = brighterColor(rect.FillColor)
+		}
+
 		rect.Resize(fyne.NewSize(barWidth-1, h))
 		rect.Move(fyne.NewPos(float32(i)*barWidth, maxH-h))
 		r.bars.Add(rect)

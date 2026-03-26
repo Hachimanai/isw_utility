@@ -27,9 +27,9 @@ This document tracks the progress of the ISW Utility implementation, following t
 - [x] **System Micro-Panel**: Display for Kernel, Uptime, and static metrics.
 
 ## Phase 4: Data Binding & Polishing
-- [ ] **Data Binding**: Connect telemetry services to Fyne widgets for smooth real-time updates.
-- [ ] **Animations & Effects**: Add 200ms transitions and "Glow" effects on interactions.
-- [ ] **Error Handling UI**: Graceful degradation if `isw` tools are missing or permissions are denied.
+- [x] **Data Binding**: Connect telemetry services to Fyne widgets for smooth real-time updates.
+- [x] **Animations & Effects**: Add 200ms transitions (via LERP) and "Glow" effects on interactions.
+- [x] **Error Handling UI**: Status bar for reporting errors (isw missing, permissions).
 
 ## Phase 5: QA & Validation
 - [ ] **Unit Testing**: Validate system data parsing and business logic.
