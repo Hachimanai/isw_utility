@@ -16,7 +16,7 @@ This document tracks the progress of the ISW Utility implementation, following t
     - [x] Develop parser for `isw` output or `/sys/class/hwmon` data.
     - [x] Implement `SystemInfo` provider (reading `/proc` or using `uname`).
 - [x] **Boost Mode Control**: Implement shell command execution (e.g., `isw -b on/off`) with proper privilege handling.
-- [ ] **Telemetry Service (`/internal/service`)**: Implement an asynchronous polling loop to update application state without blocking the UI.
+- [x] **Telemetry Service (`/internal/service`)**: Implement an asynchronous polling loop to update application state without blocking the UI.
 
 ## Phase 3: UI Development (Fyne)
 - [ ] **Main Layout Structure**: Implement the "Intentional Asymmetry" layout (Header, 2/3 - 1/3 grid, Analytics section).
