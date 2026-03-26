@@ -3,7 +3,7 @@
 This document tracks the progress of the ISW Utility implementation, following the **Terminal Architect** design system and **Clean Architecture** principles.
 
 ## Phase 1: Architecture & Technical Foundation
-- [ ] **Initial Project Setup**: Configure `go.mod` and install Fyne v2.
+- [x] **Initial Project Setup**: Configure `go.mod` and install Fyne v2.
 - [ ] **Domain Definition (`/internal/domain`)**:
     - [x] Define `Telemetry` entity (CPU/GPU Temp/Load).
     - [x] Define `FanStatus` entity (RPM, Idle/Max range).
