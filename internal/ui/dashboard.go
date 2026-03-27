@@ -79,8 +79,8 @@ func (d *Dashboard) initWidgets() {
 	d.gpuLoadLabel.TextStyle = monoBold
 
 	// Fan Gauges (using HistoryIcon as a circular placeholder)
-	d.cpuFanGauge = NewFanGauge("CPU_FAN", "CPU_RPM", theme.HistoryIcon(), 6000)
-	d.gpuFanGauge = NewFanGauge("GPU_FAN", "GPU_RPM", theme.HistoryIcon(), 6000)
+	d.cpuFanGauge = NewFanGauge("CPU_FAN", "CPU_RPM", theme.HistoryIcon(), 6000, ColorPrimary)
+	d.gpuFanGauge = NewFanGauge("GPU_FAN", "GPU_RPM", theme.HistoryIcon(), 6000, ColorSecondaryGPU)
 
 	// Analytics
 	d.cpuTempHist = NewTemperatureHistogram("CPU_TEMP_HISTORY", theme.HistoryIcon())

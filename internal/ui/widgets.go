@@ -42,6 +42,7 @@ type FanGauge struct {
 	Icon     fyne.Resource
 	RPM      int
 	Max      int
+	Color    color.Color
 
 	isHovered bool
 	rpmLabel  *widget.Label
@@ -50,18 +51,15 @@ type FanGauge struct {
 	track     *canvas.Arc
 	progress  *canvas.Arc
 	glow      *canvas.Circle
-
-	// Bottom bar
-	bottomTrack    *canvas.Rectangle
-	bottomProgress *canvas.Rectangle
 }
 
-func NewFanGauge(label, subLabel string, icon fyne.Resource, maxRPM int) *FanGauge {
+func NewFanGauge(label, subLabel string, icon fyne.Resource, maxRPM int, gaugeColor color.Color) *FanGauge {
 	g := &FanGauge{
 		Label:    label,
 		SubLabel: subLabel,
 		Icon:     icon,
 		Max:      maxRPM,
+		Color:    gaugeColor,
 	}
 	g.ExtendBaseWidget(g)
 
@@ -78,28 +76,23 @@ func NewFanGauge(label, subLabel string, icon fyne.Resource, maxRPM int) *FanGau
 
 	// Background track
 	g.track = &canvas.Arc{
-		StrokeColor: ColorSurfaceLow,
+		FillColor:   ColorSurfaceLow,
 		StartAngle:  0,
 		EndAngle:    360,
-		StrokeWidth: 10,
-		CutoutRatio: 1.0,
+		CutoutRatio: 0.75,
 	}
 
 	// Progress arc
 	g.progress = &canvas.Arc{
-		StrokeColor: ColorPrimary,
+		FillColor:   gaugeColor,
 		StartAngle:  0, // Top
 		EndAngle:    0,
-		StrokeWidth: 12,
-		CutoutRatio: 1.0,
+		CutoutRatio: 0.75,
 	}
 
 	g.glow = canvas.NewCircle(color.Transparent)
 	g.glow.StrokeWidth = 0
 	g.glow.Hide()
-
-	g.bottomTrack = canvas.NewRectangle(ColorSurfaceLow)
-	g.bottomProgress = canvas.NewRectangle(ColorPrimary)
 
 	return g
 }
@@ -111,7 +104,8 @@ func (g *FanGauge) SetRPM(rpm int) {
 
 func (g *FanGauge) MouseIn(*desktop.MouseEvent) {
 	g.isHovered = true
-	g.glow.FillColor = color.RGBA{R: ColorPrimary.R, G: ColorPrimary.G, B: ColorPrimary.B, A: 20}
+	r, gn, b, _ := g.Color.RGBA()
+	g.glow.FillColor = color.RGBA{R: uint8(r >> 8), G: uint8(gn >> 8), B: uint8(b >> 8), A: 20}
 	g.glow.Show()
 	g.Refresh()
 }
@@ -138,20 +132,10 @@ func (g *FanGauge) CreateRenderer() fyne.WidgetRenderer {
 
 	gaugeStack := container.NewStack(g.glow, g.track, g.progress, container.NewCenter(centerContent))
 
-	idleLabel := widget.NewLabel("IDLE")
-	idleLabel.TextStyle = fyne.TextStyle{Monospace: true}
-	maxLabel := widget.NewLabel("MAX")
-	maxLabel.TextStyle = fyne.TextStyle{Monospace: true}
-
-	bottomBar := container.NewStack(g.bottomTrack, g.bottomProgress)
-
-	bottomSection := container.NewBorder(nil, nil, idleLabel, maxLabel, container.NewPadded(bottomBar))
-
 	content := container.NewVBox(
 		layout.NewSpacer(),
 		gaugeStack,
 		layout.NewSpacer(),
-		bottomSection,
 	)
 
 	return &fanGaugeRenderer{
@@ -173,12 +157,12 @@ func (r *fanGaugeRenderer) Layout(size fyne.Size) {
 
 		// Circular gauge area
 		gaugeSize := size.Width * 0.7
-		if size.Height*0.6 < gaugeSize {
-			gaugeSize = size.Height * 0.6
+		if size.Height*0.7 < gaugeSize {
+			gaugeSize = size.Height * 0.7
 		}
 
 		r.center.Resize(fyne.NewSize(gaugeSize, gaugeSize))
-		r.center.Move(fyne.NewPos((size.Width-gaugeSize)/2, (size.Height*0.7-gaugeSize)/2))
+		r.center.Move(fyne.NewPos((size.Width-gaugeSize)/2, (size.Height-gaugeSize)/2))
 
 		r.gauge.track.Resize(fyne.NewSize(gaugeSize, gaugeSize))
 		r.gauge.progress.Resize(fyne.NewSize(gaugeSize, gaugeSize))
@@ -192,16 +176,11 @@ func (r *fanGaugeRenderer) Layout(size fyne.Size) {
 			percent = 1.0
 		}
 		r.gauge.progress.EndAngle = 360 * percent
-
-		// Bottom bar
-		barWidth := size.Width - 40
-		r.gauge.bottomTrack.Resize(fyne.NewSize(barWidth, 4))
-		r.gauge.bottomProgress.Resize(fyne.NewSize(barWidth*percent, 4))
 	})
 }
 
 func (r *fanGaugeRenderer) MinSize() fyne.Size {
-	return fyne.NewSize(240, 320)
+	return fyne.NewSize(240, 240)
 }
 
 func (r *fanGaugeRenderer) Refresh() {
@@ -209,15 +188,12 @@ func (r *fanGaugeRenderer) Refresh() {
 		r.gauge.rpmLabel.SetText(fmt.Sprintf("%d", r.gauge.RPM))
 
 		if r.gauge.isHovered {
-			r.gauge.progress.StrokeColor = brighterColor(ColorPrimary)
-			r.gauge.bottomProgress.FillColor = brighterColor(ColorPrimary)
+			r.gauge.progress.FillColor = brighterColor(r.gauge.Color)
 		} else {
-			r.gauge.progress.StrokeColor = ColorPrimary
-			r.gauge.bottomProgress.FillColor = ColorPrimary
+			r.gauge.progress.FillColor = r.gauge.Color
 		}
 
-		r.gauge.track.StrokeColor = ColorSurfaceLow
-		r.gauge.bottomTrack.FillColor = ColorSurfaceLow
+		r.gauge.track.FillColor = ColorSurfaceLow
 
 		percent := float32(r.gauge.RPM) / float32(r.gauge.Max)
 		if percent > 1.0 {
