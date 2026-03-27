@@ -8,6 +8,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/driver/desktop"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -36,34 +37,51 @@ func min(a, b int) int {
 // FanGauge is a custom widget for displaying fan RPM as a circular gauge.
 type FanGauge struct {
 	widget.BaseWidget
-	Label string
-	RPM   int
-	Max   int
+	Label    string
+	SubLabel string
+	Icon     fyne.Resource
+	RPM      int
+	Max      int
 
 	isHovered bool
 	rpmLabel  *widget.Label
+	subLabel  *widget.Label
+	icon      *canvas.Image
 	track     *canvas.Arc
 	progress  *canvas.Arc
 	glow      *canvas.Circle
+
+	// Bottom bar
+	bottomTrack    *canvas.Rectangle
+	bottomProgress *canvas.Rectangle
 }
 
-func NewFanGauge(label string, maxRPM int) *FanGauge {
+func NewFanGauge(label, subLabel string, icon fyne.Resource, maxRPM int) *FanGauge {
 	g := &FanGauge{
-		Label: label,
-		Max:   maxRPM,
+		Label:    label,
+		SubLabel: subLabel,
+		Icon:     icon,
+		Max:      maxRPM,
 	}
 	g.ExtendBaseWidget(g)
 
-	g.rpmLabel = widget.NewLabel("0000 RPM")
-	g.rpmLabel.TextStyle = fyne.TextStyle{Monospace: true}
+	g.rpmLabel = widget.NewLabel("0000")
+	g.rpmLabel.TextStyle = fyne.TextStyle{Monospace: true, Bold: true}
 	g.rpmLabel.Alignment = fyne.TextAlignCenter
+
+	g.subLabel = widget.NewLabel(subLabel)
+	g.subLabel.TextStyle = fyne.TextStyle{Monospace: true}
+	g.subLabel.Alignment = fyne.TextAlignCenter
+
+	g.icon = canvas.NewImageFromResource(icon)
+	g.icon.FillMode = canvas.ImageFillContain
 
 	// Background track
 	g.track = &canvas.Arc{
 		StrokeColor: ColorSurfaceLow,
 		StartAngle:  0,
 		EndAngle:    360,
-		StrokeWidth: 6,
+		StrokeWidth: 10,
 		CutoutRatio: 1.0,
 	}
 
@@ -72,13 +90,16 @@ func NewFanGauge(label string, maxRPM int) *FanGauge {
 		StrokeColor: ColorPrimary,
 		StartAngle:  0, // Top
 		EndAngle:    0,
-		StrokeWidth: 8,
+		StrokeWidth: 12,
 		CutoutRatio: 1.0,
 	}
 
 	g.glow = canvas.NewCircle(color.Transparent)
 	g.glow.StrokeWidth = 0
 	g.glow.Hide()
+
+	g.bottomTrack = canvas.NewRectangle(ColorSurfaceLow)
+	g.bottomProgress = canvas.NewRectangle(ColorPrimary)
 
 	return g
 }
@@ -107,14 +128,36 @@ func (g *FanGauge) CreateRenderer() fyne.WidgetRenderer {
 	title := widget.NewLabel(g.Label)
 	title.TextStyle = fyne.TextStyle{Bold: true}
 	title.Alignment = fyne.TextAlignCenter
-	
-	center := container.NewStack(g.glow, g.track, g.progress, g.rpmLabel)
-	content := container.NewVBox(title, center)
-	
+	title.Hide() // We hide the top title as it's not in the card in screen.png, but we keep the field
+
+	centerContent := container.NewVBox(
+		container.NewCenter(container.NewGridWithRows(1, container.NewPadded(g.icon))),
+		g.rpmLabel,
+		g.subLabel,
+	)
+
+	gaugeStack := container.NewStack(g.glow, g.track, g.progress, container.NewCenter(centerContent))
+
+	idleLabel := widget.NewLabel("IDLE")
+	idleLabel.TextStyle = fyne.TextStyle{Monospace: true}
+	maxLabel := widget.NewLabel("MAX")
+	maxLabel.TextStyle = fyne.TextStyle{Monospace: true}
+
+	bottomBar := container.NewStack(g.bottomTrack, g.bottomProgress)
+
+	bottomSection := container.NewBorder(nil, nil, idleLabel, maxLabel, container.NewPadded(bottomBar))
+
+	content := container.NewVBox(
+		layout.NewSpacer(),
+		gaugeStack,
+		layout.NewSpacer(),
+		bottomSection,
+	)
+
 	return &fanGaugeRenderer{
 		gauge:   g,
 		content: content,
-		center:  center,
+		center:  gaugeStack,
 	}
 }
 
@@ -127,53 +170,61 @@ type fanGaugeRenderer struct {
 func (r *fanGaugeRenderer) Layout(size fyne.Size) {
 	fyne.Do(func() {
 		r.content.Resize(size)
-		
-		// Square gauge in the center
-		titleHeight := r.content.(*fyne.Container).Objects[0].MinSize().Height
-		gaugeSize := size.Width
-		if size.Height-titleHeight < gaugeSize {
-			gaugeSize = size.Height - titleHeight
+
+		// Circular gauge area
+		gaugeSize := size.Width * 0.7
+		if size.Height*0.6 < gaugeSize {
+			gaugeSize = size.Height * 0.6
 		}
-		gaugeSize -= 10 // Padding
-		
+
 		r.center.Resize(fyne.NewSize(gaugeSize, gaugeSize))
-		r.center.Move(fyne.NewPos((size.Width-gaugeSize)/2, titleHeight))
-		
+		r.center.Move(fyne.NewPos((size.Width-gaugeSize)/2, (size.Height*0.7-gaugeSize)/2))
+
 		r.gauge.track.Resize(fyne.NewSize(gaugeSize, gaugeSize))
 		r.gauge.progress.Resize(fyne.NewSize(gaugeSize, gaugeSize))
-		r.gauge.glow.Resize(fyne.NewSize(gaugeSize+10, gaugeSize+10))
-		r.gauge.glow.Move(fyne.NewPos(-5, -5))
+		r.gauge.glow.Resize(fyne.NewSize(gaugeSize+20, gaugeSize+20))
+		r.gauge.glow.Move(fyne.NewPos(-10, -10))
+
+		r.gauge.icon.SetMinSize(fyne.NewSize(gaugeSize*0.2, gaugeSize*0.2))
 
 		percent := float32(r.gauge.RPM) / float32(r.gauge.Max)
 		if percent > 1.0 {
 			percent = 1.0
 		}
 		r.gauge.progress.EndAngle = 360 * percent
+
+		// Bottom bar
+		barWidth := size.Width - 40
+		r.gauge.bottomTrack.Resize(fyne.NewSize(barWidth, 4))
+		r.gauge.bottomProgress.Resize(fyne.NewSize(barWidth*percent, 4))
 	})
 }
 
 func (r *fanGaugeRenderer) MinSize() fyne.Size {
-	return fyne.NewSize(120, 140)
+	return fyne.NewSize(240, 320)
 }
 
 func (r *fanGaugeRenderer) Refresh() {
 	fyne.Do(func() {
-		r.gauge.rpmLabel.SetText(fmt.Sprintf("%d\nRPM", r.gauge.RPM))
-		
+		r.gauge.rpmLabel.SetText(fmt.Sprintf("%d", r.gauge.RPM))
+
 		if r.gauge.isHovered {
 			r.gauge.progress.StrokeColor = brighterColor(ColorPrimary)
+			r.gauge.bottomProgress.FillColor = brighterColor(ColorPrimary)
 		} else {
 			r.gauge.progress.StrokeColor = ColorPrimary
+			r.gauge.bottomProgress.FillColor = ColorPrimary
 		}
-		
+
 		r.gauge.track.StrokeColor = ColorSurfaceLow
-		
+		r.gauge.bottomTrack.FillColor = ColorSurfaceLow
+
 		percent := float32(r.gauge.RPM) / float32(r.gauge.Max)
 		if percent > 1.0 {
 			percent = 1.0
 		}
 		r.gauge.progress.EndAngle = 360 * percent
-		
+
 		canvas.Refresh(r.content)
 	})
 }
@@ -188,15 +239,17 @@ func (r *fanGaugeRenderer) Destroy() {}
 type TemperatureHistogram struct {
 	widget.BaseWidget
 	Label   string
+	Icon    fyne.Resource
 	History []float64
 	MaxVal  float64
 
 	isHovered bool
 }
 
-func NewTemperatureHistogram(label string) *TemperatureHistogram {
+func NewTemperatureHistogram(label string, icon fyne.Resource) *TemperatureHistogram {
 	h := &TemperatureHistogram{
 		Label:   label,
+		Icon:    icon,
 		History: make([]float64, 40),
 		MaxVal:  100.0,
 	}
@@ -220,21 +273,42 @@ func (h *TemperatureHistogram) MouseOut() {
 }
 
 func (h *TemperatureHistogram) MouseMoved(*desktop.MouseEvent) {}
-
 func (h *TemperatureHistogram) CreateRenderer() fyne.WidgetRenderer {
 	title := widget.NewLabel(h.Label)
-	title.TextStyle = fyne.TextStyle{Bold: true}
-	
+	title.TextStyle = fyne.TextStyle{Monospace: true, Bold: true}
+
+	icon := canvas.NewImageFromResource(h.Icon)
+	icon.FillMode = canvas.ImageFillContain
+	icon.SetMinSize(fyne.NewSize(16, 16))
+
+	rangeLabel := widget.NewLabel("RANGE: 0-100°C")
+	rangeLabel.TextStyle = fyne.TextStyle{Monospace: true}
+	rangeLabel.Alignment = fyne.TextAlignTrailing
+
+	header := container.NewHBox(icon, title, layout.NewSpacer(), rangeLabel)
+
 	bars := container.NewMax() // Container for bars
-	
-	content := container.NewVBox(title, bars)
-	
+
+	t1 := widget.NewLabel("-15m")
+	t2 := widget.NewLabel("-10m")
+	t3 := widget.NewLabel("-5m")
+	t4 := widget.NewLabel("NOW")
+	for _, l := range []*widget.Label{t1, t2, t3, t4} {
+		l.TextStyle = fyne.TextStyle{Monospace: true}
+		l.Alignment = fyne.TextAlignCenter
+	}
+
+	footer := container.NewHBox(t1, layout.NewSpacer(), t2, layout.NewSpacer(), t3, layout.NewSpacer(), t4)
+
+	content := container.NewVBox(header, container.NewPadded(bars), footer)
+
 	return &tempHistogramRenderer{
 		hist:    h,
 		content: content,
 		bars:    bars,
 	}
 }
+
 
 type tempHistogramRenderer struct {
 	hist    *TemperatureHistogram
@@ -248,7 +322,7 @@ func (r *tempHistogramRenderer) Layout(size fyne.Size) {
 		
 		// Layout bars within the bars container
 		barWidth := size.Width / float32(len(r.hist.History))
-		maxH := size.Height - 30 // Subtract title height
+		maxH := size.Height - 60 // Subtract header and footer height
 		
 		r.bars.Objects = nil
 		for i, val := range r.hist.History {
@@ -265,7 +339,7 @@ func (r *tempHistogramRenderer) Layout(size fyne.Size) {
 				rect.FillColor = brighterColor(rect.FillColor)
 			}
 
-			rect.Resize(fyne.NewSize(barWidth-1, h))
+			rect.Resize(fyne.NewSize(barWidth-2, h))
 			rect.Move(fyne.NewPos(float32(i)*barWidth, maxH-h))
 			r.bars.Add(rect)
 		}
@@ -273,7 +347,7 @@ func (r *tempHistogramRenderer) Layout(size fyne.Size) {
 }
 
 func (r *tempHistogramRenderer) MinSize() fyne.Size {
-	return fyne.NewSize(200, 100)
+	return fyne.NewSize(400, 200)
 }
 
 func (r *tempHistogramRenderer) Refresh() {

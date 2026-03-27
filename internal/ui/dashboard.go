@@ -10,6 +10,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -66,24 +67,24 @@ func (d *Dashboard) initWidgets() {
 	monoBold := fyne.TextStyle{Monospace: true, Bold: true}
 	mono := fyne.TextStyle{Monospace: true}
 
-	// Header Widgets
+	// Header Widgets (Telemetry Card)
 	d.cpuTempLabel = widget.NewLabel("00°C")
 	d.cpuLoadLabel = widget.NewLabel("00%")
 	d.gpuTempLabel = widget.NewLabel("00°C")
 	d.gpuLoadLabel = widget.NewLabel("00%")
 
-	d.cpuTempLabel.TextStyle = mono
-	d.cpuLoadLabel.TextStyle = mono
-	d.gpuTempLabel.TextStyle = mono
-	d.gpuLoadLabel.TextStyle = mono
+	d.cpuTempLabel.TextStyle = monoBold
+	d.cpuLoadLabel.TextStyle = monoBold
+	d.gpuTempLabel.TextStyle = monoBold
+	d.gpuLoadLabel.TextStyle = monoBold
 
-	// Fan Gauges
-	d.cpuFanGauge = NewFanGauge("CPU_FAN", 6000)
-	d.gpuFanGauge = NewFanGauge("GPU_FAN", 6000)
+	// Fan Gauges (using HistoryIcon as a circular placeholder)
+	d.cpuFanGauge = NewFanGauge("CPU_FAN", "CPU_RPM", theme.HistoryIcon(), 6000)
+	d.gpuFanGauge = NewFanGauge("GPU_FAN", "GPU_RPM", theme.HistoryIcon(), 6000)
 
 	// Analytics
-	d.cpuTempHist = NewTemperatureHistogram("CPU_TEMP_HISTORY")
-	d.gpuTempHist = NewTemperatureHistogram("GPU_TEMP_HISTORY")
+	d.cpuTempHist = NewTemperatureHistogram("CPU_TEMP_HISTORY", theme.HistoryIcon())
+	d.gpuTempHist = NewTemperatureHistogram("GPU_TEMP_HISTORY", theme.HistoryIcon())
 
 	// Boost Mode Buttons
 	d.boostOnBtn = widget.NewButton("BOOST_ON", func() {
@@ -158,53 +159,69 @@ func createSectionTitle(text string) *widget.Label {
 	return l
 }
 
+func createTelemetryItem(label string, value *widget.Label) fyne.CanvasObject {
+	l := widget.NewLabel(label)
+	l.TextStyle = fyne.TextStyle{Monospace: true}
+	return container.NewVBox(l, value)
+}
+
 // BuildLayout constructs the Fyne container hierarchy.
 func (d *Dashboard) BuildLayout() fyne.CanvasObject {
-	headerBg := canvas.NewRectangle(ColorSurfaceLow)
-	
-	headerContent := container.NewHBox(
-		layout.NewSpacer(),
-		createSectionTitle("CPU:"), d.cpuTempLabel, d.cpuLoadLabel,
-		layout.NewSpacer(),
-		createSectionTitle("GPU:"), d.gpuTempLabel, d.gpuLoadLabel,
-		layout.NewSpacer(),
-	)
-	header := container.NewStack(headerBg, container.NewPadded(headerContent))
+	// 1. Header
+	title := widget.NewLabel("THERMAL_ARCHITECT")
+	title.TextStyle = fyne.TextStyle{Monospace: true, Bold: true}
+	title.Alignment = fyne.TextAlignLeading
 
-	fansContent := container.NewGridWithColumns(2, d.cpuFanGauge, d.gpuFanGauge)
-	fansCard := container.NewVBox(
-		createSectionTitle("FAN_GAUGES"),
-		fansContent,
-	)
-	
-	analyticsCard := container.NewVBox(
-		createSectionTitle("ANALYTICS"),
-		d.cpuTempHist,
-		d.gpuTempHist,
-	)
+	telemetryCard := TonalCard(container.NewHBox(
+		createTelemetryItem("CPU_TEMP", d.cpuTempLabel),
+		layout.NewSpacer(),
+		createTelemetryItem("CPU_LOAD", d.cpuLoadLabel),
+		layout.NewSpacer(),
+		createTelemetryItem("GPU_TEMP", d.gpuTempLabel),
+		layout.NewSpacer(),
+		createTelemetryItem("GPU_LOAD", d.gpuLoadLabel),
+	))
 
-	leftSection := container.NewVBox(fansCard, layout.NewSpacer(), analyticsCard)
+	header := container.NewHBox(title, layout.NewSpacer(), telemetryCard)
 
-	sidePanelBg := canvas.NewRectangle(ColorSurfaceLow)
-	sidePanelContent := container.NewVBox(
-		createSectionTitle("CONTROL"),
+	// 2. Main Section (3 columns)
+	boostCard := TonalCard(container.NewVBox(
+		container.NewHBox(widget.NewLabel("⚡"), createSectionTitle("BOOST_MODE")),
+		widget.NewLabel("Override EC fan curves for maximum\nthermal dissipation (isw -b on)."),
 		container.NewGridWithColumns(2, d.boostOnBtn, d.boostOffBtn),
-		layout.NewSpacer(),
+	))
+
+	sysInfoCard := TonalCard(container.NewVBox(
 		createSectionTitle("SYSTEM_INFO"),
-		d.kernelLabel,
-		d.uptimeLabel,
-		d.cpuFreqLabel,
+		container.NewHBox(widget.NewLabel("KERNEL"), layout.NewSpacer(), d.kernelLabel),
+		container.NewHBox(widget.NewLabel("UPTIME"), layout.NewSpacer(), d.uptimeLabel),
+		container.NewHBox(widget.NewLabel("CPU_FREQ"), layout.NewSpacer(), d.cpuFreqLabel),
+	))
+
+	mainGrid := container.NewGridWithColumns(3,
+		TonalCard(d.cpuFanGauge),
+		TonalCard(d.gpuFanGauge),
+		container.NewVBox(boostCard, sysInfoCard),
 	)
-	sidePanel := container.NewStack(sidePanelBg, container.NewPadded(sidePanelContent))
 
-	mainArea := container.NewHSplit(container.NewPadded(leftSection), sidePanel)
-	mainArea.Offset = 0.7 
+	// 3. Analytics Section (2 columns)
+	analyticsGrid := container.NewGridWithColumns(2,
+		TonalCard(d.cpuTempHist),
+		TonalCard(d.gpuTempHist),
+	)
 
-	footerBg := canvas.NewRectangle(ColorSurfaceHigh)
-	footerContent := container.NewHBox(d.statusLabel, layout.NewSpacer())
-	footer := container.NewStack(footerBg, container.NewPadded(footerContent))
+	// Footer
+	footer := TonalCardHigh(container.NewHBox(d.statusLabel, layout.NewSpacer()))
 
-	return container.NewBorder(header, footer, nil, nil, mainArea)
+	content := container.NewVBox(
+		container.NewPadded(header),
+		container.NewPadded(mainGrid),
+		container.NewPadded(analyticsGrid),
+		layout.NewSpacer(),
+		footer,
+	)
+
+	return container.NewStack(canvas.NewRectangle(ColorBackground), content)
 }
 
 // SetStatus updates the status label.

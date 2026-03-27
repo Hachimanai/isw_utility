@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"isw_utility/internal/repository"
 	"isw_utility/internal/service"
 	"isw_utility/internal/ui"
