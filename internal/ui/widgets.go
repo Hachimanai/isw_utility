@@ -263,7 +263,7 @@ func (h *TemperatureHistogram) CreateRenderer() fyne.WidgetRenderer {
 
 	header := container.NewHBox(icon, title, layout.NewSpacer(), rangeLabel)
 
-	bars := container.NewMax() // Container for bars
+	bars := container.NewWithoutLayout() // Manual positioning
 
 	t1 := widget.NewLabel("-15m")
 	t2 := widget.NewLabel("-10m")
@@ -276,15 +276,39 @@ func (h *TemperatureHistogram) CreateRenderer() fyne.WidgetRenderer {
 
 	footer := container.NewHBox(t1, layout.NewSpacer(), t2, layout.NewSpacer(), t3, layout.NewSpacer(), t4)
 
-	content := container.NewVBox(header, container.NewPadded(bars), footer)
+	// Wrap bars in a container that provides a min size
+	barsContainer := container.New(layout.NewMaxLayout(), bars)
+	// We'll use a simple container with a custom layout that returns a min size
+	barsWrapper := container.New(newMinSizeLayout(fyne.NewSize(0, 100)), barsContainer)
 
-	return &tempHistogramRenderer{
+	content := container.NewVBox(header, container.NewPadded(barsWrapper), footer)
+
+	r := &tempHistogramRenderer{
 		hist:    h,
 		content: content,
 		bars:    bars,
 	}
+	return r
 }
 
+type minSizeLayout struct {
+	minSize fyne.Size
+}
+
+func newMinSizeLayout(min fyne.Size) fyne.Layout {
+	return &minSizeLayout{minSize: min}
+}
+
+func (l *minSizeLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	for _, obj := range objects {
+		obj.Resize(size)
+		obj.Move(fyne.NewPos(0, 0))
+	}
+}
+
+func (l *minSizeLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	return l.minSize
+}
 
 type tempHistogramRenderer struct {
 	hist    *TemperatureHistogram
@@ -293,33 +317,8 @@ type tempHistogramRenderer struct {
 }
 
 func (r *tempHistogramRenderer) Layout(size fyne.Size) {
-	fyne.Do(func() {
-		r.content.Resize(size)
-		
-		// Layout bars within the bars container
-		barWidth := size.Width / float32(len(r.hist.History))
-		maxH := size.Height - 60 // Subtract header and footer height
-		
-		r.bars.Objects = nil
-		for i, val := range r.hist.History {
-			if val <= 0 {
-				continue
-			}
-			h := float32(val/r.hist.MaxVal) * maxH
-			rect := canvas.NewRectangle(ColorPrimary)
-			if val > 80 {
-				rect.FillColor = ColorError
-			}
-			
-			if r.hist.isHovered {
-				rect.FillColor = brighterColor(rect.FillColor)
-			}
-
-			rect.Resize(fyne.NewSize(barWidth-2, h))
-			rect.Move(fyne.NewPos(float32(i)*barWidth, maxH-h))
-			r.bars.Add(rect)
-		}
-	})
+	r.content.Resize(size)
+	r.Refresh()
 }
 
 func (r *tempHistogramRenderer) MinSize() fyne.Size {
@@ -328,7 +327,41 @@ func (r *tempHistogramRenderer) MinSize() fyne.Size {
 
 func (r *tempHistogramRenderer) Refresh() {
 	fyne.Do(func() {
-		r.Layout(r.content.Size())
+		// Layout bars within the bars container
+		size := r.bars.Size()
+		if size.Width == 0 || size.Height == 0 {
+			// If not yet laid out, use a default or parent-based size
+			size = fyne.NewSize(r.content.Size().Width-16, 100)
+		}
+
+		barWidth := size.Width / float32(len(r.hist.History))
+		maxH := size.Height
+
+		r.bars.Objects = nil
+		for i, val := range r.hist.History {
+			if val <= 0 {
+				// Still add an object to keep the index/spacing if needed, 
+				// but here we just skip to keep it clean.
+				continue
+			}
+			h := float32(val/r.hist.MaxVal) * maxH
+			if h < 2 {
+				h = 2 // Minimum visible height
+			}
+
+			rect := canvas.NewRectangle(ColorPrimary)
+			if val > 80 {
+				rect.FillColor = ColorError
+			}
+
+			if r.hist.isHovered {
+				rect.FillColor = brighterColor(rect.FillColor)
+			}
+
+			rect.Resize(fyne.NewSize(barWidth-1, h))
+			rect.Move(fyne.NewPos(float32(i)*barWidth, maxH-h))
+			r.bars.Add(rect)
+		}
 		canvas.Refresh(r.content)
 	})
 }
