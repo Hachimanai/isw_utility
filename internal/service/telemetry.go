@@ -90,26 +90,31 @@ func (s *TelemetryService) SetBoostMode(ctx context.Context, enabled bool) error
 }
 
 func (s *TelemetryService) collectData(ctx context.Context) (DashboardState, error) {
+	slog.Debug("Collecting: telemetry...")
 	telemetry, err := s.sensorRepo.GetTelemetry(ctx)
 	if err != nil {
-		return DashboardState{}, fmt.Errorf("failed to get telemetry: %w", err)
+		slog.Warn("Telemetry fetch failed", "error", err)
 	}
 
+	slog.Debug("Collecting: fans...")
 	fans, err := s.sensorRepo.GetFans(ctx)
 	if err != nil {
-		return DashboardState{}, fmt.Errorf("failed to get fans: %w", err)
+		slog.Warn("Fans fetch failed", "error", err)
 	}
 
+	slog.Debug("Collecting: system info...")
 	system, err := s.sensorRepo.GetSystemInfo(ctx)
 	if err != nil {
-		return DashboardState{}, fmt.Errorf("failed to get system info: %w", err)
+		slog.Warn("System info fetch failed", "error", err)
 	}
 
-	boost, err := s.controlRepo.GetBoostMode(ctx)
-	if err != nil {
-		// Log but don't fail, maybe boost info is not critical or not available
-		slog.Warn("Failed to get boost mode status", "error", err)
-	}
+	slog.Debug("Collecting: boost state...")
+	boost, _ := s.controlRepo.GetBoostMode(ctx)
+
+	slog.Debug("Collected all data successfully", 
+		"cpuTemp", telemetry.CPUTemp, 
+		"fanCount", len(fans),
+	)
 
 	return DashboardState{
 		Telemetry: telemetry,

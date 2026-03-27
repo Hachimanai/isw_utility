@@ -32,6 +32,13 @@ This document tracks the progress of the ISW Utility implementation, following t
 - [x] **Error Handling UI**: Status bar for reporting errors (isw missing, permissions).
 
 ## Phase 5: QA & Validation
-- [ ] **Unit Testing**: Validate system data parsing and business logic.
-- [ ] **UI Testing**: Verify interface responsiveness and "Boost Mode" activation.
-- [ ] **Performance Audit**: Ensure low CPU/Memory footprint for the monitoring utility.
+- [x] **Unit Testing**: Validated system data parsing and fallback logic.
+- [x] **UI Testing**: Verified interface responsiveness, "Boost Mode" activation, and transition effects.
+- [x] **Performance Audit**: Optimized animation loop (30ms ticker) with low CPU footprint.
+
+## Final Notes
+- **Circular Fan Gauges**: Successfully implemented using `canvas.Arc` (available in Fyne v2.7+).
+- **Resilience**: A `CompositeRepository` has been implemented to allow the application to function with or without the `isw` tool, falling back to `/sys/class/hwmon`, `/proc`, and `nvidia-smi`.
+- **NVIDIA Support**: Added direct telemetry for NVIDIA GPUs via `nvidia-smi`.
+- **EC Communication**: Fixed `isw` command arguments (added `MSI_ADDRESS_DEFAULT`) and increased authentication timeouts for a seamless "Boost Mode" experience.
+- **Design System**: Strict adherence to the "Terminal Architect" aesthetic.

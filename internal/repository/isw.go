@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"isw_utility/internal/domain"
 )
@@ -20,8 +21,11 @@ func NewISWRepository() *ISWRepository {
 }
 
 func (r *ISWRepository) GetTelemetry(ctx context.Context) (domain.Telemetry, error) {
-	// isw -r typically provides temperatures.
-	output, err := r.runCommand(ctx, "isw", "-r")
+	// Use a short timeout for ISW calls to avoid blocking the main loop
+	ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
+	defer cancel()
+	
+	output, err := r.runCommand(ctx, "isw", "-r", "MSI_ADDRESS_DEFAULT")
 	if err != nil {
 		return domain.Telemetry{}, err
 	}
@@ -30,7 +34,10 @@ func (r *ISWRepository) GetTelemetry(ctx context.Context) (domain.Telemetry, err
 }
 
 func (r *ISWRepository) GetFans(ctx context.Context) ([]domain.FanStatus, error) {
-	output, err := r.runCommand(ctx, "isw", "-r")
+	ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
+	defer cancel()
+	
+	output, err := r.runCommand(ctx, "isw", "-r", "MSI_ADDRESS_DEFAULT")
 	if err != nil {
 		return nil, err
 	}
@@ -49,18 +56,29 @@ func (r *ISWRepository) SetBoostMode(ctx context.Context, enabled bool) error {
 	if enabled {
 		state = "on"
 	}
-	_, err := r.runCommand(ctx, "isw", "-b", state)
+	// Use pkexec with absolute path for better reliability
+	_, err := r.runCommand(ctx, "pkexec", "/usr/bin/isw", "-b", state)
 	return err
 }
 
 func (r *ISWRepository) GetBoostMode(ctx context.Context) (bool, error) {
-	// isw -r often shows boost mode status or we can infer from max RPM.
-	// For now, let's assume it's in the status output.
-	output, err := r.runCommand(ctx, "isw", "-r")
+	// Use a short timeout to prevent hanging the whole app
+	ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
+	defer cancel()
+
+	output, err := r.runCommand(ctx, "isw", "-r", "MSI_ADDRESS_DEFAULT")
 	if err != nil {
 		return false, err
 	}
-	return strings.Contains(strings.ToLower(output), "cooler boost: on"), nil
+	// Fallback check: if fans are at very high RPM, boost is likely ON
+	fans := r.parseFans(output)
+	for _, f := range fans {
+		if f.RPM > 5500 {
+			return true, nil
+		}
+	}
+	return strings.Contains(strings.ToLower(output), "cooler boost: on") || 
+	       strings.Contains(strings.ToLower(output), "cooler boost: 1"), nil
 }
 
 func (r *ISWRepository) runCommand(ctx context.Context, name string, arg ...string) (string, error) {
@@ -69,43 +87,76 @@ func (r *ISWRepository) runCommand(ctx context.Context, name string, arg ...stri
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("failed to run %s %v: %w (stderr: %s)", name, arg, err, stderr.String())
+		stderrStr := strings.TrimSpace(stderr.String())
+		if stderrStr == "" {
+			return "", fmt.Errorf("failed to run %s %v: %w", name, arg, err)
+		}
+		return "", fmt.Errorf("%s", stderrStr)
 	}
 	return stdout.String(), nil
 }
 
 func (r *ISWRepository) parseTelemetry(output string) domain.Telemetry {
 	t := domain.Telemetry{}
-	// Regex for "CPU Temperature: 45°C"
-	reTemp := regexp.MustCompile(`(CPU|GPU) Temperature:\s*(\d+)`)
+	// Look for any number followed by °C
+	reTemp := regexp.MustCompile(`(\d+)°C`)
 	matches := reTemp.FindAllStringSubmatch(output, -1)
-	for _, m := range matches {
+	if len(matches) >= 1 {
+		val, _ := strconv.Atoi(matches[0][1])
+		t.CPUTemp = float64(val)
+	}
+	if len(matches) >= 2 {
+		val, _ := strconv.Atoi(matches[1][1])
+		t.GPUTemp = float64(val)
+	}
+	
+	// Also support the original label format as fallback
+	reLabel := regexp.MustCompile(`(?i)(CPU|GPU)\s*(?:Temperature|Temp):\s*(\d+)`)
+	matchesLabel := reLabel.FindAllStringSubmatch(output, -1)
+	for _, m := range matchesLabel {
 		val, _ := strconv.Atoi(m[2])
-		if m[1] == "CPU" {
+		label := strings.ToUpper(m[1])
+		if label == "CPU" && t.CPUTemp == 0 {
 			t.CPUTemp = float64(val)
-		} else {
+		} else if label == "GPU" && t.GPUTemp == 0 {
 			t.GPUTemp = float64(val)
 		}
 	}
-	// Note: isw -r might not provide Load. Load is better fetched from /proc or another tool.
 	return t
 }
 
 func (r *ISWRepository) parseFans(output string) []domain.FanStatus {
 	fans := []domain.FanStatus{}
-	// Regex for "CPU Fan Speed: 2150 RPM"
-	reFan := regexp.MustCompile(`(CPU|GPU) Fan Speed:\s*(\d+)`)
-	matches := reFan.FindAllStringSubmatch(output, -1)
-	for _, m := range matches {
+	// Look for any number followed by RPM
+	reRPM := regexp.MustCompile(`(\d+)\s*RPM`)
+	matches := reRPM.FindAllStringSubmatch(output, -1)
+	
+	if len(matches) >= 1 {
+		val, _ := strconv.Atoi(matches[0][1])
+		fans = append(fans, domain.FanStatus{Label: "CPU_FAN", RPM: val, MaxRPM: 6000})
+	}
+	if len(matches) >= 2 {
+		val, _ := strconv.Atoi(matches[1][1])
+		fans = append(fans, domain.FanStatus{Label: "GPU_FAN", RPM: val, MaxRPM: 6000})
+	}
+
+	// Also support the original label format as fallback
+	reLabel := regexp.MustCompile(`(?i)(CPU|GPU)\s*(?:Fan Speed|Fan|FAN):\s*(\d+)`)
+	matchesLabel := reLabel.FindAllStringSubmatch(output, -1)
+	for _, m := range matchesLabel {
 		val, _ := strconv.Atoi(m[2])
-		fans = append(fans, domain.FanStatus{
-			Label:   m[1] + "_FAN",
-			RPM:     val,
-			// IDLE/MAX ranges could be fetched from config or calibrated.
-			// Defaulting to reasonable values for a laptop.
-			IdleRPM: 0,
-			MaxRPM:  6000,
-		})
+		label := strings.ToUpper(m[1]) + "_FAN"
+		// Check if we already have it
+		found := false
+		for _, f := range fans {
+			if f.Label == label {
+				found = true
+				break
+			}
+		}
+		if !found {
+			fans = append(fans, domain.FanStatus{Label: label, RPM: val, MaxRPM: 6000})
+		}
 	}
 	return fans
 }

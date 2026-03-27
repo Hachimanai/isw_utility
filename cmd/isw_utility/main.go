@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"isw_utility/internal/repository"
 	"isw_utility/internal/service"
 	"isw_utility/internal/ui"
@@ -20,10 +21,14 @@ func main() {
 
 	// Create repositories
 	iswRepo := repository.NewISWRepository()
-	// Using ISWRepository for both sensors and control as it implements both
+	hwmonRepo := repository.NewHwmonRepository()
+	systemRepo := repository.NewSystemRepository()
+	
+	// Composite repository for fallback and better data coverage
+	compositeRepo := repository.NewCompositeRepository(iswRepo, hwmonRepo, systemRepo)
 	
 	// Create telemetry service
-	telemetryService := service.NewTelemetryService(iswRepo, iswRepo, 1*time.Second)
+	telemetryService := service.NewTelemetryService(compositeRepo, compositeRepo, 1*time.Second)
 
 	// Create application and window
 	myApp := app.New()
